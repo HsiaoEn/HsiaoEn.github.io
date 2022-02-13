@@ -1,0 +1,385 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom"><title>HsiaoEn's Blog</title><link href="/" rel="alternate"></link><link href="/feeds/all-en.atom.xml" rel="self"></link><id>/</id><updated>2022-02-03T22:08:00+08:00</updated><entry><title>Intro to Attention Mechanism</title><link href="/2022/intro-to-attention-mechanism.html" rel="alternate"></link><published>2022-02-03T22:08:00+08:00</published><updated>2022-02-03T22:08:00+08:00</updated><author><name>HsiaoEn</name></author><id>tag:None,2022-02-03:/2022/intro-to-attention-mechanism.html</id><summary type="html">&lt;blockquote&gt;
+&lt;p&gt;注意力機制(Attention Mechanism)是現今自然語言處理(Natural Language Processing, NLP)領域發展當中重要的一環，&lt;strong&gt;它幫助解決了 RNN 本身記憶力受限的問題&lt;/strong&gt;，這樣的機制使得模型在原有 NLP 的任務上表現更好。若是要了解 Attention 的概念，可以從 Seq2Seq Model 說起，了解傳統 Seq2Seq Model 在語言翻譯任務上的 …&lt;/p&gt;&lt;/blockquote&gt;</summary><content type="html">&lt;blockquote&gt;
+&lt;p&gt;注意力機制(Attention Mechanism)是現今自然語言處理(Natural Language Processing, NLP)領域發展當中重要的一環，&lt;strong&gt;它幫助解決了 RNN 本身記憶力受限的問題&lt;/strong&gt;，這樣的機制使得模型在原有 NLP 的任務上表現更好。若是要了解 Attention 的概念，可以從 Seq2Seq Model 說起，了解傳統 Seq2Seq Model 在語言翻譯任務上的侷限性以及在加入 Attention 機制後翻譯效能如何得到改善，這樣的機制不僅可用在語言翻譯任務上，也可用在其它類型的任務以加強原模型的效能，如 QA 等任務。&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;!--more--&gt;
+
+&lt;p&gt;因此下面將以 Seq2Seq 做為起始的說明，接著再看到 Attention 如何被帶到 Seq2Seq 的模型之中，最後再來看看關於 Attention 在問答模型(QA)中的應用，以此來比較在不同情境中 Attention 可以如何被利用，以下介紹將基於下面所列的參考文獻做為說明基礎：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Seq2Seq Model:&lt;ul&gt;
+&lt;li&gt;[Sutskever, et al. 2014] &lt;a href="https://arxiv.org/abs/1409.3215"&gt;&lt;strong&gt;&lt;em&gt;Sequence to Sequence Learning with Neural Networks&lt;/em&gt;&lt;/strong&gt;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;[KyungHyun Cho, et al. 2014] &lt;a href="https://arxiv.org/abs/1406.1078"&gt;&lt;strong&gt;&lt;em&gt;Learning Phrase Representations using RNN Encoder-Decoder for Statistical Machine Translation&lt;/em&gt;&lt;/strong&gt;&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;Basic Attention Mechanism:&lt;ul&gt;
+&lt;li&gt;[Dzmitry Bahdanau, et al. 2015] &lt;a href="https://arxiv.org/abs/1409.0473"&gt;&lt;strong&gt;&lt;em&gt;Neural Machine Translation by Jointly Learning to Align and Translate&lt;/em&gt;&lt;/strong&gt;&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;Attention applied in QA Problem&lt;ul&gt;
+&lt;li&gt;[Cicero dos Santos, et al. 2016] &lt;a href="https://arxiv.org/abs/1602.03609"&gt;&lt;strong&gt;&lt;em&gt;Attentive Pooling Networks&lt;/em&gt;&lt;/strong&gt;&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3&gt;&lt;strong&gt;Seq2Seq Model&lt;/strong&gt;&lt;/h3&gt;
+&lt;p&gt;我們日常用來溝通的語言，例如「你好嗎？」、「今天天氣不錯！」, 可以被看待成一連串的字詞依照出現時間先後順序所做的排列，也就是時間序列(Time series)。在 NLP 領域中，有一類任務所面對的問題是輸入是一串序列(Input Sequence)：&lt;span class="math"&gt;\(x_1, x_2, ..., x_S\)&lt;/span&gt;，目標的輸出也是一串序列(Target Sequence)：&lt;span class="math"&gt;\(y_1, y_2, ..., y_T\)&lt;/span&gt;, 而且特別要注意的是這兩個 Sequence 的長度可以不一樣長，例如機器翻譯(Machine Translation, MT)就屬這類的任務之一，對於這樣輸入是 sequence，輸出也是 sequence 的模型我們稱為 Sequence to Sequence Model，或簡寫為 Seq2Seq Model:&lt;/p&gt;
+&lt;p&gt;&lt;center&gt;
+    &lt;img src="../images/intro_to_attention_01.png" alt="未顯示圖片" width="200px"/&gt; 
+&lt;/center&gt;
+&lt;center&gt;
+    &lt;em&gt;Fig. 1. Seq2Seq Model&lt;/em&gt;
+&lt;/center&gt;&lt;/p&gt;
+&lt;p&gt;首先, 對於 Seq2Seq 這樣的任務，一般的 Deep Neural Network 是做不到的(雖然現在有了 Transformer 但目前先不考慮它)，其中一個原因是「順序」對於 Sequence 是有意義的，但是若我們將 Sequence 這樣的資料送進一般的 Deep Nerual Network，模型就只會依據每一次送進模型的資料給出相應的 Output，資料送進模型的順序並不會對 Output 有任何影響，因此要完成 Seq2Seq 這樣的任務就需要用到有循環結構的 RNN 模型。&lt;/p&gt;
+&lt;p&gt;另一方面，即便考慮了 RNN 模型，我們還是會面對到 Input Sequence: &lt;span class="math"&gt;\(x_1, x_2, ..., x_S\)&lt;/span&gt; 與 Target Sequence: &lt;span class="math"&gt;\(y_1, y_2, ..., y_T\)&lt;/span&gt; 長度不一致的情形。 因此在 &lt;em&gt;Sequence to Sequence Learning with Neural Networks&lt;/em&gt; 中就提出以下兩個方案來完成 Seq2Seq 的任務：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;以 LSTM 做為神經網路模型的架構&lt;/li&gt;
+&lt;li&gt;將 Input Sequence: &lt;span class="math"&gt;\(x_1, x_2, ..., x_S\)&lt;/span&gt; 透過 RNN 先 map 到一個固定長度的 vector: &lt;span class="math"&gt;\(v\)&lt;/span&gt;，接著再將 &lt;span class="math"&gt;\(v\)&lt;/span&gt; 透過另一個 RNN map 到 Target Sequence: &lt;span class="math"&gt;\(y_1, y_2, ..., y_T\)&lt;/span&gt;，如此就能處理 Input Sequence 與 Target Sequence 長度不一致一情形&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;center&gt;
+    &lt;img src="../images/intro_to_attention_02.png" alt="未顯示圖片" width="600px"&gt;
+&lt;/center&gt;&lt;/p&gt;
+&lt;p&gt;&lt;center&gt;
+    &lt;em&gt;
+        Fig. 2. Seq2Seq Model with RNN structure
+    &lt;/em&gt;
+&lt;/center&gt;&lt;br&gt;&lt;/p&gt;
+&lt;p&gt;Seq2Seq 模型的架構就如 &lt;em&gt;Fig. 2.&lt;/em&gt; 所呈現，&amp;lt; BOS &amp;gt; 和 &lt;EOS&gt; 分別表示句子的開始(Begin of Sentence) 和結束(End of Sentence)，整體模型的架構可以拆解為兩個主要的子架構：&lt;strong&gt;Encoder&lt;/strong&gt; 和 &lt;strong&gt;Decoder&lt;/strong&gt;
+* &lt;strong&gt;Encoder&lt;/strong&gt;：其功用是把 Input Sequence 壓縮至一個固定長度的 &lt;strong&gt;Context Vector&lt;/strong&gt; &lt;span class="math"&gt;\(v\)&lt;/span&gt;，因此可以把 &lt;span class="math"&gt;\(v\)&lt;/span&gt; 認定為它夾帶了整個 Input Sequence 必要的資訊。
+* &lt;strong&gt;Decoder&lt;/strong&gt;：以 Context Vector 及 &amp;lt; BOS &amp;gt; Token 做為 Decoder 的起始輸入，讓 Decoder 參照 Context Vector 等於是讓 Deocder 參照到 Input Sequence 的資訊，以及 &amp;lt; BOS &amp;gt; 只是單純讓 Decoder 開始根據 Context vector 所夾帶的資訊給出我們期望的 Target Sequence ，隨後 Decoder 的輸出一直到 &amp;lt; EOS &amp;gt; Token 出現為止。
+&lt;center&gt;
+    &lt;img src="../images/intro_to_attention_03.png" alt="未顯示圖片" width="500px"&gt;
+&lt;/center&gt;&lt;/p&gt;
+&lt;p&gt;&lt;center&gt;
+    &lt;em&gt;
+        Fig. 3. Encoder-Decoder Structure
+    &lt;/em&gt;
+&lt;/center&gt;&lt;br&gt;&lt;/p&gt;
+&lt;p&gt;整個模型在做的事就是估計條件機率 &lt;span class="math"&gt;\(p(y_1,...,y_T|x_1,...,x_S)\)&lt;/span&gt;:&lt;/p&gt;
+&lt;div class="math"&gt;\begin{align}
+p(y_1,...,y_T|x_1,...,x_S)
+    &amp;amp;=p(y_1|v)\times 
+    ...
+    \times p(y_T|v,y_1,...,y_{T-1})\\
+    &amp;amp;=\prod_{t=1}^{T}p(y_t|v,y_1,...y_{t-1})
+\end{align}&lt;/div&gt;
+&lt;p&gt;其中 &lt;span class="math"&gt;\(p(y_t|v,y_1,...y_{t-1})\)&lt;/span&gt; 取自於 Decoder 部份的 RNN 最後一層以 softmax 輸出的結果。&lt;/p&gt;
+&lt;p&gt;以上的 Encoder-Decoder 架構也可以有一些其它的變化，例如可以考慮將 Encoder 做出來的 Context vector 給 Decoder 每一個時間點的輸入，這樣子的做法出自於 &lt;em&gt;Learning Phrase Representations using RNN Encoder-Decoder for Statistical Machine Translation&lt;/em&gt; 這篇論文，文中稱這樣的架構為 RNN Encoder-Decoder：&lt;/p&gt;
+&lt;p&gt;&lt;center&gt;
+    &lt;img src="../images/intro_to_attention_04.png" alt="未顯示圖片" width="500px" &gt;
+&lt;/center&gt;&lt;/p&gt;
+&lt;p&gt;&lt;center&gt;
+&lt;em&gt;Fig. 4. RNN Encoder-Decoder,其中 Context vector &lt;b&gt;c&lt;/b&gt; 皆會做為每一次 Hidden state 及 RNN output 的參考&lt;/em&gt;
+&lt;/center&gt;&lt;/p&gt;
+&lt;p&gt;由 &lt;em&gt;Fig. 4.&lt;/em&gt; 不論是 Hidden state 或是 Decoder RNN 的輸出，皆會參考 Context vector &lt;span class="math"&gt;\(c\)&lt;/span&gt;：&lt;br&gt;
+&lt;/p&gt;
+&lt;div class="math"&gt;\begin{align}
+    &amp;amp;h_{t}=f(h_{t-1}, y_{t-1}, c)\\
+    &amp;amp;p(y_{t}|c,y_1,...,y_{t-1})=g(h_{t},y_{t-1}, c)
+\end{align}&lt;/div&gt;
+&lt;p&gt;其中 &lt;span class="math"&gt;\(f\)&lt;/span&gt; 和 &lt;span class="math"&gt;\(g\)&lt;/span&gt; 為 nonlinear activation function 且 g 的輸出端接上 softmax 以讓輸出&lt;span class="math"&gt;\(\mathbf{y}\)&lt;/span&gt;表現出機率分佈。&lt;/p&gt;
+&lt;h3&gt;&lt;strong&gt;Basic Attention Mechanism&lt;/strong&gt;&lt;/h3&gt;
+&lt;p&gt;以上的 Encoder-Decoder 架構皆是由一個統一的 Context vector(由 Encoder 吃完整個 input sequence 後所輸出的 Hidden state) 送給 Decoder 做為 input sequence 的資訊參考，這個做法所基於的一個前題是 Context vector &lt;span class="math"&gt;\(\mathbf{c}\)&lt;/span&gt; 必須包含了所有關於 input sequence 的必要資訊，但是實際上 Context vector 能不能包含必要的完整資訊傳送給 Decoder 其實是個問題，這樣的問題源自 RNN 本身的缺陷，也就是&lt;strong&gt;記憶能力的受限&lt;/strong&gt;，尤其是當 input sequence 的長度一長時 sequence 前段的資訊就有可能被遺漏，LSTM 與 GRU 也是針對這個問題對 RNN 來做改良，但還是無法完全避免當 input sequence 長度一長時無法記錄完整資訊的這個問題。&lt;/p&gt;
+&lt;p&gt;基於以上的問題 &lt;em&gt;Neural Machine Translation by Jointly Learning to Align and Translate&lt;/em&gt; 這篇論文提出了 Attention 的做法，讓 Decoder 在每一個時間點的輸出不會只參考固定的 Context vector &lt;span class="math"&gt;\(c\)&lt;/span&gt;,而是一個會變動的 Context vector &lt;span class="math"&gt;\(c_t\)&lt;/span&gt;，這個變動的 &lt;span class="math"&gt;\(c_t\)&lt;/span&gt; 會依據 Attention 的機制對 Encoder 每一個時間點的 Hidden state 給予不同程度的關注：&lt;/p&gt;
+&lt;p&gt;&lt;center&gt;
+    &lt;img src="../images/intro_to_attention_05.png" alt="未顯示圖片" width="500px" &gt;
+&lt;/center&gt;&lt;/p&gt;
+&lt;p&gt;&lt;center&gt;
+    &lt;em&gt;Fig. 5. 結合 Attention 機制的 Encoder-Decoder 架構
+    &lt;/em&gt;
+&lt;/center&gt;&lt;/p&gt;
+&lt;p&gt;這樣的機制釋放了 Encoder 要做出一個包含整個 input sequence 必要資訊的 Context vector 這樣的負擔，並且 Decoder 可以更有效的利用 input sequence 在每一個時間點帶來的資訊，這也使得在 MT 任務上如此的模型架構對於長句的翻譯表現得更好：&lt;/p&gt;
+&lt;p&gt;&lt;center&gt;  &lt;br&gt;
+    &lt;img src="../images/intro_to_attention_06.png" alt="未顯示圖片" width="500px" &gt;
+&lt;/center&gt;&lt;/p&gt;
+&lt;p&gt;&lt;center&gt;
+    &lt;em&gt;Fig. 6. RNNsearch 為結合 Attention 機制的 Encoder-Decoder Model，RNNenc 為沒有使用 Attention 機制的 Encoder-Decoder Model，可以看出來長句子的翻譯上使用 Attention 的模型表現更好&lt;/em&gt;
+&lt;/center&gt;&lt;/p&gt;
+&lt;h4&gt;&lt;strong&gt;模型架構&lt;/strong&gt;&lt;/h4&gt;
+&lt;p&gt;設 &lt;span class="math"&gt;\(\mathbf{x}=(x_1, ...,x_S)\)&lt;/span&gt; 和 &lt;span class="math"&gt;\(\mathbf{y}=(y_1, ...,y_T)\)&lt;/span&gt; 分別為 input sequence 和 target sequence, 模型一樣分為 Encoder 與 Decoder 兩個部分：&lt;/p&gt;
+&lt;h5&gt;&lt;strong&gt;Encoder&lt;/strong&gt;&lt;/h5&gt;
+&lt;p&gt;Encoder 是一個 Bidirectional RNN, 將 input sequence &lt;span class="math"&gt;\((x_1, ...,x_S)\)&lt;/span&gt; 分別以順向與逆向送給 RNN 所作出來的 hidden states &lt;span class="math"&gt;\(\overrightarrow{h_j}\)&lt;/span&gt; 與 &lt;span class="math"&gt;\(\overleftarrow{h_j}\)&lt;/span&gt; 接併起來形成 &lt;span class="math"&gt;\(h_j={[{\overrightarrow{h_j}}^T:{\overleftarrow{h_j}}^T]}^T\)&lt;/span&gt;，論文中稱 &lt;span class="math"&gt;\(h_j\)&lt;/span&gt; 為 &lt;span class="math"&gt;\(x_j\)&lt;/span&gt; 的 annotation, 所以最後對於 input sequence &lt;span class="math"&gt;\(\mathbf{x}\)&lt;/span&gt; 我們會有 &lt;span class="math"&gt;\(S\)&lt;/span&gt; 個 annotations &lt;span class="math"&gt;\((h_1, ..., h_S)\)&lt;/span&gt;。 &lt;/p&gt;
+&lt;h5&gt;&lt;strong&gt;Decoder&lt;/strong&gt;&lt;/h5&gt;
+&lt;p&gt;Decoder 要做的事就是估計條件機率 &lt;span class="math"&gt;\(p(y_t|y_1,...,y_{t-1}, \mathbf{x})\)&lt;/span&gt;, 可將其視為 decoder input &lt;span class="math"&gt;\(y_{t-1}\)&lt;/span&gt;, hidden state &lt;span class="math"&gt;\(s_i\)&lt;/span&gt;, 與 context vetcot &lt;span class="math"&gt;\(c_i\)&lt;/span&gt; 的一個函數 &lt;span class="math"&gt;\(g\)&lt;/span&gt;:
+    &lt;/p&gt;
+&lt;div class="math"&gt;\begin{align}
+    p(y_t|y_1,...,y_{t-1}, \mathbf{x})=g(s_t, y_{t-1}, c_t)
+    \end{align}&lt;/div&gt;
+&lt;p&gt;其中 &lt;span class="math"&gt;\(s_t\)&lt;/span&gt; 為在時間 &lt;span class="math"&gt;\(t\)&lt;/span&gt; 時的一個 RNN hidden state:
+    &lt;/p&gt;
+&lt;div class="math"&gt;\begin{align}
+    s_t=f(s_{t-1}, y_{t-1}, c_t)
+    \end{align}&lt;/div&gt;
+&lt;p&gt;另外要注意到這邊的 Context vector &lt;span class="math"&gt;\(c_t\)&lt;/span&gt;，它是隨時間變動的，由 &lt;em&gt;Fig. 5.&lt;/em&gt; 可以了解 &lt;span class="math"&gt;\(c_t\)&lt;/span&gt; 會由 &lt;span class="math"&gt;\(\alpha_{t,1},...,\alpha_{t,S}\)&lt;/span&gt; 與 &lt;span class="math"&gt;\(h_1, ..., h_S\)&lt;/span&gt; 做 weighted sum 而得，&lt;span class="math"&gt;\(\alpha_{t,1},...,\alpha_{t,S}\)&lt;/span&gt; 即代表了在 &lt;span class="math"&gt;\(t\)&lt;/span&gt; 這個時間點 decode 時所參考 encoder 各時間點的 hidden state 的比重，而這些 &lt;span class="math"&gt;\(\alpha_{t,j}\)&lt;/span&gt; 就是由 &lt;strong&gt;Attention mechanism&lt;/strong&gt; 計算而得，計算的方式並不複雜：
+1. 以一個 score function &lt;span class="math"&gt;\(\mathrm{score}\)&lt;/span&gt; 將上一個時間點的 hidden state &lt;span class="math"&gt;\(s_{t-1}\)&lt;/span&gt; 與在 Encoder 當中每個時間點的 annotation &lt;span class="math"&gt;\(h_j, \, j=1,...,S\)&lt;/span&gt; 取得兩者之間的分數 &lt;span class="math"&gt;\(\mathrm{score}(s_{t-1},h_j), \, j=1,...,S\)&lt;/span&gt;, 這個 score function 可以是一個 feedforward network with one hidden layer 論文中的定義如下：
+    &lt;/p&gt;
+&lt;div class="math"&gt;\begin{align}
+    \mathrm{score}(s_{t-1},h_j)=v_a^T\tanh(W_as_{t-1}+U_ah_j)
+    \end{align}&lt;/div&gt;
+&lt;p&gt;論文中稱這個 score function 為 alignment model。&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;接著再將每一個 &lt;span class="math"&gt;\(\mathrm{score}(s_{t-1},h_j)\)&lt;/span&gt; 做標準化(normalization)，即取得 &lt;span class="math"&gt;\(\alpha_{t,j}\)&lt;/span&gt;:
+    &lt;div class="math"&gt;\begin{align}
+    \alpha_{t,j}=\frac{\exp(\mathrm{score}(s_{t-1},h_j))}{\sum\limits_{k=1}^S\exp(\mathrm{score}(s_{t-1},h_k))}
+    \end{align}&lt;/div&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;最後，Context vector &lt;span class="math"&gt;\(c_t=\sum\limits_{j=1}^S\alpha_{t,j}h_j\)&lt;/span&gt;&lt;/p&gt;
+&lt;h4&gt;&lt;strong&gt;結果呈現&lt;/strong&gt;&lt;/h4&gt;
+&lt;p&gt;模型實作是以英文翻譯法文為目標，&lt;em&gt;Fig. 7.&lt;/em&gt; 中的每一個 pixel 表示 &lt;span class="math"&gt;\(\alpha_{t,j}\)&lt;/span&gt; 的值(第 j 個 target word(法文)對第 t 個 sorce word(英文) 的 annotation 的權重 &lt;span class="math"&gt;\(\alpha\)&lt;/span&gt; 值，以灰階表示 0:black, 1:white)&lt;/p&gt;
+&lt;p&gt;&lt;center&gt;
+    &lt;img src="../images/intro_to_attention_07.png" alt="未顯示圖片" width="500px" &gt;
+&lt;/center&gt;&lt;/p&gt;
+&lt;p&gt;&lt;center&gt;
+    &lt;em&gt;Fig. 7. 英文對於法文的 attention 結果，英文是 source 法文是模型翻譯後的結果&lt;/em&gt;
+&lt;/center&gt;&lt;/p&gt;
+&lt;h3&gt;&lt;strong&gt;Attention applied in QA Problem&lt;/strong&gt;&lt;/h3&gt;
+&lt;p&gt;接下來可以再看看另一個 Attention 的例子，這個例子是把 Attention mechanism 加入 QA 的模型中，從而模型達到了更好的表現。任務是給定一個問題 &lt;span class="math"&gt;\(q\)&lt;/span&gt; 和對於問題 &lt;span class="math"&gt;\(q\)&lt;/span&gt; 的一池候選答案 &lt;span class="math"&gt;\(P = \{a_1, a_2,...,a_p \}\)&lt;/span&gt; ，我們要從候選答案中找出正確回答問題 &lt;span class="math"&gt;\(q\)&lt;/span&gt; 的答案 &lt;span class="math"&gt;\(a \in P\)&lt;/span&gt;。&lt;/p&gt;
+&lt;p&gt;對於這樣的問題一種簡單的模型架構做法是可以設計兩條 NN(Neural Network) 路徑，一條作為輸入問題 &lt;span class="math"&gt;\(q\)&lt;/span&gt; 使用，另一條作為輸入候選答案 &lt;span class="math"&gt;\(a\)&lt;/span&gt; 使用，當 &lt;span class="math"&gt;\(q\)&lt;/span&gt; 和 &lt;span class="math"&gt;\(a\)&lt;/span&gt; 經過各自的 NN 路抽取出各自的 representation &lt;span class="math"&gt;\(r_q\)&lt;/span&gt; 和 &lt;span class="math"&gt;\(r_a\)&lt;/span&gt; 後，可以再介由適當的 metric 來比對 &lt;span class="math"&gt;\(r_q\)&lt;/span&gt; 和 &lt;span class="math"&gt;\(r_a\)&lt;/span&gt; 的相似度，例如 cosine-similarity ，而正確答案就以相似度與 &lt;span class="math"&gt;\(q\)&lt;/span&gt; 最高的 &lt;span class="math"&gt;\(a\)&lt;/span&gt; 來認定。&lt;/p&gt;
+&lt;p&gt;&lt;center&gt;  &lt;br&gt;
+    &lt;img src="../images/intro_to_attention_08.png" alt="未顯示圖片" width="500px"&gt;
+&lt;/center&gt;&lt;/p&gt;
+&lt;p&gt;&lt;center&gt;
+    &lt;em&gt;Fig. 8. 模型內部可採用 CNN 或 LSTM 來取得 representation&lt;/em&gt;
+&lt;/center&gt;&lt;/p&gt;
+&lt;h4&gt;&lt;strong&gt;模型架構&lt;/strong&gt;&lt;/h4&gt;
+&lt;h5&gt;&lt;strong&gt;基本模型架構&lt;/strong&gt;&lt;/h5&gt;
+&lt;p&gt;以下我們參照 &lt;em&gt;Fig. 8.&lt;/em&gt; 來解釋模型架構，首先給定我們的問題 &lt;span class="math"&gt;\(q\)&lt;/span&gt; 與 候選答案 &lt;span class="math"&gt;\(a\)&lt;/span&gt;，&lt;span class="math"&gt;\(q\)&lt;/span&gt; 和 &lt;span class="math"&gt;\(a\)&lt;/span&gt; 各自包合了 &lt;span class="math"&gt;\(M\)&lt;/span&gt; 和 &lt;span class="math"&gt;\(L\)&lt;/span&gt; 個 tokens(也就是可以理解為 &lt;span class="math"&gt;\(q\)&lt;/span&gt; 和 &lt;span class="math"&gt;\(a\)&lt;/span&gt; 兩個敍述各自包含了多少個字)：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;span class="math"&gt;\(q\)&lt;/span&gt; 和 &lt;span class="math"&gt;\(a\)&lt;/span&gt; 會先通過各自的 word embedding layer, 每一個 token 會變成一個 word vector ，以 &lt;span class="math"&gt;\(q^{emb}=\{r^{w_1}, r^{w_2}, ..., r^{w_M}\}\)&lt;/span&gt; 和 &lt;span class="math"&gt;\(a^{emb}=\{r^{w_1}, r^{w_2}, ..., r^{w_L}\}\)&lt;/span&gt; 表示，其中每個 &lt;span class="math"&gt;\(r^w \in \mathbb{R}^d\)&lt;/span&gt;。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;接著可以使用 CNN 或 LSTM 來處理 word embedding 後的序列:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;我們先以使用 CNN 的方式作為說明, 以 &lt;span class="math"&gt;\(q^{emb}=\{r^{w_1}, r^{w_2}, ..., r^{w_M}\}\)&lt;/span&gt; 中的每一個 word embedding &lt;span class="math"&gt;\(r^{w_m}\)&lt;/span&gt; 為中心將前後總共 &lt;span class="math"&gt;\(k\)&lt;/span&gt; 個 word embedding 接併起來，形成 &lt;span class="math"&gt;\(z_m \in \mathbb{R}^{dk}\)&lt;/span&gt;(所以 &lt;span class="math"&gt;\(k\)&lt;/span&gt; 就是 CNN 的 filter size)，定義矩陣 &lt;span class="math"&gt;\(Z^q=[z_1,z_2,...,z_M]\)&lt;/span&gt;，我們也可設定 convolution 的 filter 數量，我們定為 &lt;span class="math"&gt;\(c\)&lt;/span&gt;，所以 CNN 的運算即為：
+&lt;div class="math"&gt;\begin{align}
+Q=W^1Z^q+b^1
+\end{align}&lt;/div&gt;
+其中 &lt;span class="math"&gt;\(W^1\)&lt;/span&gt; 與 &lt;span class="math"&gt;\(b^1\)&lt;/span&gt; 為需要學習的參數，所得到的矩陣 &lt;span class="math"&gt;\(Q \in \mathbb{R}^{c \times M}\)&lt;/span&gt; 的第 &lt;span class="math"&gt;\(m\)&lt;/span&gt; 個 column 包含了透過 context window(即 filter)在第 &lt;span class="math"&gt;\(m\)&lt;/span&gt; 個字周圍萃取出來的特徵。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;同樣的做法也可用在 &lt;span class="math"&gt;\(a^{emb}=\{r^{w_1}, r^{w_2}, ..., r^{w_L}\}\)&lt;/span&gt; 上，使用相同的 NN 參數 &lt;span class="math"&gt;\(W^1\)&lt;/span&gt; 和 &lt;span class="math"&gt;\(b^1\)&lt;/span&gt; 計算矩陣 &lt;span class="math"&gt;\(A \in \mathbb{R}^{c \times L}\)&lt;/span&gt;:
+&lt;div class="math"&gt;\begin{align}
+A=W^1Z^a+b^1
+\end{align}&lt;/div&gt;
+&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;LSTM 的做法也是類似，不過是透過雙向的 LSTM (biLSTM) 將順向與逆向每一個 time step 的 hiddem states 接併起來形成 &lt;span class="math"&gt;\(h_t = \overrightarrow{h_t}||\overleftarrow{h_t}\)&lt;/span&gt;，最後 &lt;span class="math"&gt;\(Q\)&lt;/span&gt; 與 &lt;span class="math"&gt;\(A\)&lt;/span&gt; 的 column 就是由各自 &lt;span class="math"&gt;\(q\)&lt;/span&gt; 與 &lt;span class="math"&gt;\(a\)&lt;/span&gt; 作為輸入所得的 hidden states 所組成的矩陣。&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;在取得矩陣 &lt;span class="math"&gt;\(Q\)&lt;/span&gt; 與 &lt;span class="math"&gt;\(A\)&lt;/span&gt; 之後，我們可以對各別矩陣採取 column-wise max-pooling，隨後再套用 &lt;span class="math"&gt;\(\tanh\)&lt;/span&gt; 作為 activation function 以取得 &lt;span class="math"&gt;\(q\)&lt;/span&gt; 與 &lt;span class="math"&gt;\(a\)&lt;/span&gt; 的 representations &lt;span class="math"&gt;\(r^q\)&lt;/span&gt; 與 &lt;span class="math"&gt;\(r^a\)&lt;/span&gt;:
+    &lt;div class="math"&gt;\begin{align}
+    r^q = \tanh(\max\limits_{1&amp;lt;m&amp;lt;M}[Q_{j,m}])\\
+    r^a = \tanh(\max\limits_{1&amp;lt;m&amp;lt;L}[A_{j,l}])
+    \end{align}&lt;/div&gt;
+&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;最後再取得 &lt;span class="math"&gt;\(r^q\)&lt;/span&gt; 與 &lt;span class="math"&gt;\(r^a\)&lt;/span&gt; 的 cosine-similarity，作為 &lt;span class="math"&gt;\(q\)&lt;/span&gt; 與 &lt;span class="math"&gt;\(a\)&lt;/span&gt; 比對的分數:
+    &lt;div class="math"&gt;\begin{align}
+    s(q,a)=\frac{r^q \cdot r^q}{||r^q||||r^a||}
+    \end{align}&lt;/div&gt;
+&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;在模型訓練上採用 triplet-loss:
+    &lt;/p&gt;
+&lt;div class="math"&gt;\begin{align}
+    L = \max\{0, m-s(q,a^+)+s(q,a^-)\}
+    \end{align}&lt;/div&gt;
+&lt;p&gt;其中 &lt;span class="math"&gt;\(a^+\)&lt;/span&gt; 代表對於問題 &lt;span class="math"&gt;\(q\)&lt;/span&gt; 而言正確的答案，&lt;span class="math"&gt;\(a^-\)&lt;/span&gt; 代表錯誤的答案，&lt;span class="math"&gt;\(m\)&lt;/span&gt; 的意思是 margin，整個 loss function 的用意是讓 &lt;span class="math"&gt;\(s(q,a^+)\)&lt;/span&gt; 與 &lt;span class="math"&gt;\(s(q,a^-)\)&lt;/span&gt; 的差距高過一個 margin &lt;span class="math"&gt;\(m\)&lt;/span&gt; 以上，以至於模型在所謂的 latent space 中能更容易區分 &lt;span class="math"&gt;\(a^+\)&lt;/span&gt; 與 &lt;span class="math"&gt;\(a^-\)&lt;/span&gt;。&lt;/p&gt;
+&lt;h5&gt;&lt;strong&gt;Attention Pooling&lt;/strong&gt;&lt;/h5&gt;
+&lt;p&gt;以上所談的模型架構是沒加入 Attention mechanism 以前的基本做法，此篇論文提出 Attentive Pooling(AP) 的方法，此方法是一種 two-way Attention mechanism, 這裡的 two-way 應該是兩個方向的意思，表示這樣的機制不僅會讓 &lt;span class="math"&gt;\(q\)&lt;/span&gt; attend to &lt;span class="math"&gt;\(a\)&lt;/span&gt; 同時也會讓 &lt;span class="math"&gt;\(a\)&lt;/span&gt; attend to &lt;span class="math"&gt;\(q\)&lt;/span&gt;. &lt;/p&gt;
+&lt;p&gt;由 &lt;em&gt;Fig. 9.&lt;/em&gt; AP 的機制是在原先的模型架構上取得 &lt;span class="math"&gt;\(Q\)&lt;/span&gt; 和 &lt;span class="math"&gt;\(A\)&lt;/span&gt; 矩陣之後計算
+    &lt;/p&gt;
+&lt;div class="math"&gt;\begin{align}
+    G=\tanh(Q^TUA)
+    \end{align}&lt;/div&gt;
+&lt;p&gt;其中 &lt;span class="math"&gt;\(U \in \mathbb{R}^{c \times c}\)&lt;/span&gt; 是需要透過 NN 學習的參數。&lt;/p&gt;
+&lt;p&gt;&lt;center&gt;  &lt;br&gt;
+&lt;img src="../images/intro_to_attention_09.png" alt="未顯示圖片" width="500px" &gt;
+&lt;/center&gt;&lt;/p&gt;
+&lt;p&gt;&lt;center&gt;
+&lt;em&gt;Fig. 9. Attentive Pooling Networks&lt;/em&gt;
+&lt;/center&gt;&lt;/p&gt;
+&lt;p&gt;這邊我們可以來看看 &lt;span class="math"&gt;\(Q^TUA\)&lt;/span&gt; 的運算：
+設 
+    &lt;/p&gt;
+&lt;div class="math"&gt;\begin{align}
+    Q^T=
+    \left[
+    \begin{array}{ccc}
+    -q_1^T- \\
+    -q_2^T- \\
+    \vdots \\
+    -q_M^T-
+    \end{array}
+    \right], \,
+    A=
+    \left[
+    \begin{array}{cccc}
+    | &amp;amp; | &amp;amp; &amp;amp; |\\
+    a_1 &amp;amp; a_2 &amp;amp;\dots&amp;amp; a_L \\
+    | &amp;amp; | &amp;amp; &amp;amp; |\\
+    \end{array}
+    \right]
+    \end{align}&lt;/div&gt;
+&lt;p&gt;其中 &lt;span class="math"&gt;\(q_i^T \in \mathbb{R}^{1 \times c},
+    a_i \in \mathbb{R}^{c \times 1}\)&lt;/span&gt;。
+    &lt;/p&gt;
+&lt;div class="math"&gt;\begin{align}
+    Q^TUA
+    &amp;amp;=Q^T
+    \left[
+    \begin{array}{cccc}
+    | &amp;amp; | &amp;amp; &amp;amp; |\\
+    Ua_1 &amp;amp; Ua_2 &amp;amp;\dots&amp;amp; Ua_L \\
+    | &amp;amp; | &amp;amp; &amp;amp; |\\
+    \end{array}
+    \right] \\
+    &amp;amp;=
+    \left[
+    \begin{array}{cccc}
+    q_1^TUa_1 &amp;amp; q_1^TUa_2 &amp;amp; \dots &amp;amp; q_1^TUa_L \\
+    q_2^TUa_1 &amp;amp; q_2^TUa_2 &amp;amp; \dots &amp;amp; q_2^TUa_L \\
+    \vdots &amp;amp; \vdots &amp;amp; \dots &amp;amp; \vdots \\
+    q_M^TUa_1 &amp;amp; q_M^TUa_2 &amp;amp; \dots &amp;amp; q_M^TUa_L
+    \end{array}
+    \right]
+    \end{align}&lt;/div&gt;
+&lt;p&gt;由以上的計算，我們看到每一列(row)是由一個特定的 &lt;span class="math"&gt;\(q_i\)&lt;/span&gt; 與每一個 &lt;span class="math"&gt;\(Ua_j, \, j=1,2,...,L\)&lt;/span&gt; 的內積，所以第 &lt;span class="math"&gt;\(i\)&lt;/span&gt; 列的這些內積值 &lt;span class="math"&gt;\(q_i^TUa_1, \, q_i^TUa_2, \,...,\, q_i^TUa_L\)&lt;/span&gt; 可視為特定的 &lt;span class="math"&gt;\(q_i\)&lt;/span&gt; 對個別 &lt;span class="math"&gt;\(a_j, \, j=1,2,...,L\)&lt;/span&gt; 的關注分數。同理，若是由每一行(column)來看，每一行是由特定的 &lt;span class="math"&gt;\(a_j\)&lt;/span&gt; 與每一個 &lt;span class="math"&gt;\(U^Tq_i, \, i=1,2,...,M\)&lt;/span&gt; 的內積，因此第 &lt;span class="math"&gt;\(j\)&lt;/span&gt; 行的內積值 &lt;span class="math"&gt;\((U^Tq_1)^Ta_j, \, (U^Tq_2)^Ta_j, \,..., \, (U^Tq_M)^Ta_j\)&lt;/span&gt; 可視為特定的 &lt;span class="math"&gt;\(a_j\)&lt;/span&gt; 對個別 &lt;span class="math"&gt;\(q_i, \, i=1,2,...,M\)&lt;/span&gt; 的關注分數。我們計算 &lt;span class="math"&gt;\(G\)&lt;/span&gt; 如下：
+    &lt;/p&gt;
+&lt;div class="math"&gt;\begin{align}
+    G=\tanh(Q^TUA)
+    \end{align}&lt;/div&gt;
+&lt;p&gt;由以上討論，若對 &lt;span class="math"&gt;\(G\)&lt;/span&gt; 做 column-wise max-pooling，我們會得到 &lt;span class="math"&gt;\(g^q\)&lt;/span&gt;:
+    &lt;/p&gt;
+&lt;div class="math"&gt;\begin{align}
+    [g^q]_i=\max\limits_{1 \leq l \leq L}G_{i,l}
+    \end{align}&lt;/div&gt;
+&lt;p&gt;其意義表示在問題 &lt;span class="math"&gt;\(q\)&lt;/span&gt; 的第 &lt;span class="math"&gt;\(i\)&lt;/span&gt; 個字附近對於整個答案 &lt;span class="math"&gt;\(a\)&lt;/span&gt; 的 importance score。同樣地，若對 &lt;span class="math"&gt;\(G\)&lt;/span&gt; 做 row-wise max-pooling，我們會得到 &lt;span class="math"&gt;\(g^a\)&lt;/span&gt;:
+    &lt;/p&gt;
+&lt;div class="math"&gt;\begin{align}
+    [g^a]_j=\max\limits_{1 \leq m \leq M}G_{m,j}
+    \end{align}&lt;/div&gt;
+&lt;p&gt;其意義表示在答案 &lt;span class="math"&gt;\(a\)&lt;/span&gt; 的第 &lt;span class="math"&gt;\(j\)&lt;/span&gt; 個字附近對於整個問題 &lt;span class="math"&gt;\(q\)&lt;/span&gt; 的 importance score。&lt;/p&gt;
+&lt;p&gt;經過前面的計算分別算出 importance scores &lt;span class="math"&gt;\(g^q\)&lt;/span&gt; 和 &lt;span class="math"&gt;\(g^a\)&lt;/span&gt; 之後，接下來就與 &lt;strong&gt;Basic Attention Mechanism&lt;/strong&gt; 中一樣做 normalization:
+    &lt;/p&gt;
+&lt;div class="math"&gt;\begin{align}
+    &amp;amp;[\sigma^q]_i=\frac{[g^q]_i}{\sum\limits_{m=1}^M[g^q]_m}\\
+    &amp;amp;[\sigma^a]_j=\frac{[g^a]_j}{\sum\limits_{l=1}^L[g^a]_l}
+    \end{align}&lt;/div&gt;
+&lt;p&gt;得到 normalized importance scores &lt;span class="math"&gt;\([\sigma^q]_i\)&lt;/span&gt; 和 &lt;span class="math"&gt;\([\sigma^a]_j\)&lt;/span&gt; 之後，我們要做的最後一步就是將每個 score 作為對應到 &lt;span class="math"&gt;\(q_i\)&lt;/span&gt; 和 &lt;span class="math"&gt;\(a_j\)&lt;/span&gt; 的權重然後計算其加權平均, 即得到最終的 representations &lt;span class="math"&gt;\(r^q\)&lt;/span&gt; 和 &lt;span class="math"&gt;\(r^a\)&lt;/span&gt;：
+    &lt;/p&gt;
+&lt;div class="math"&gt;\begin{align}
+    r^q&amp;amp;=[\sigma^q]_1q_1+[\sigma^q]_2q_2+...+[\sigma^q]_Mq_M\\
+    &amp;amp;=Q\sigma^q
+    \end{align}&lt;/div&gt;
+&lt;p&gt;
+同理，&lt;span class="math"&gt;\(r^a=A\sigma^a\)&lt;/span&gt;。&lt;/p&gt;
+&lt;h4&gt;&lt;strong&gt;結果&lt;/strong&gt;&lt;/h4&gt;
+&lt;p&gt;在加入了 AP 機制以後, 由 &lt;em&gt;Fig. 10.&lt;/em&gt; 可以看到不論是 AP-CNN 或是 AP-BILSTM 表現不僅比原來的 QA-CNN 與 QA-BILSTM 好，也贏過了當時的 SOTA(state-of-the-art) (Feng et al.,2015) 與 (Tan et al., 2015)。&lt;/p&gt;
+&lt;p&gt;&lt;center&gt;
+    &lt;img src="../images/intro_to_attention_10.png" alt="未顯示圖片" width="500px" &gt;
+&lt;/center&gt;&lt;/p&gt;
+&lt;p&gt;&lt;center&gt;
+    &lt;em&gt;Fig. 10. 不同模型在 InsuranceQA dataset 上的準確度&lt;/em&gt;
+&lt;/center&gt;&lt;/p&gt;
+&lt;p&gt;不僅僅是準確度的提升，由 &lt;em&gt;Fig. 11.&lt;/em&gt; 加入 Attention 機制後的 AP-CNN 所需要的參數量比起 QA-CNN 來得更少。&lt;/p&gt;
+&lt;p&gt;&lt;center&gt;
+&lt;img src="../images/intro_to_attention_11.png" alt="未顯示圖片" width="500px" &gt;
+&lt;/center&gt;&lt;/p&gt;
+&lt;p&gt;&lt;center&gt;
+    &lt;em&gt;Fig. 11. 各個模型的超參數設定&lt;/em&gt;
+&lt;/center&gt;&lt;/p&gt;
+&lt;p&gt;同時也可以看到一般而言準確度會隨著 Answer 的長度逐漸降低，但是 AP-CNN 下降的幅度卻沒有 QA-CNN 來得多。&lt;/p&gt;
+&lt;p&gt;&lt;center&gt;
+    &lt;img src="../images/intro_to_attention_12.png" alt="未顯示圖片" width="500px" &gt;
+&lt;/center&gt;&lt;/p&gt;
+&lt;p&gt;&lt;center&gt;
+    &lt;em&gt;Fig. 12. 隨著 Answer 長度增加模型的準確度表現&lt;/em&gt;
+&lt;/center&gt;&lt;/p&gt;
+&lt;p&gt;最後由 &lt;em&gt;Fig. 13.&lt;/em&gt; 也可以看到對於 AP-CNN 正確回答的 Question 與 Answer ，Attention 對 Question 與 Ansewer 各部位所關注的程度, 其中顏色愈深表示關注的程度愈大。&lt;/p&gt;
+&lt;p&gt;&lt;center&gt;
+    &lt;img src="../images/intro_to_attention_13.png" alt="未顯示圖片"  width="500px"&gt;
+&lt;/center&gt;&lt;/p&gt;
+&lt;p&gt;&lt;center&gt;
+    &lt;em&gt;
+        Fig. 13. Attention 關注度的 heat map
+    &lt;/em&gt;
+&lt;/center&gt;&lt;/p&gt;
+&lt;h3&gt;&lt;strong&gt;Reference&lt;/strong&gt;&lt;/h3&gt;
+&lt;ol&gt;
+&lt;li&gt;[Sutskever, et al. 2014] &lt;a href="https://arxiv.org/abs/1409.3215"&gt;&lt;strong&gt;&lt;em&gt;Sequence to Sequence Learning with Neural Networks&lt;/em&gt;&lt;/strong&gt;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;[KyungHyun Cho, et al. 2014] &lt;a href="https://arxiv.org/abs/1406.1078"&gt;&lt;strong&gt;&lt;em&gt;Learning Phrase Representations using RNN Encoder-Decoder for Statistical Machine Translation&lt;/em&gt;&lt;/strong&gt;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;[Dzmitry Bahdanau, et al. 2015] &lt;a href="https://arxiv.org/abs/1409.0473"&gt;&lt;strong&gt;&lt;em&gt;Neural Machine Translation by Jointly Learning to Align and Translate&lt;/em&gt;&lt;/strong&gt;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;[Cicero dos Santos, et al. 2016] &lt;a href="https://arxiv.org/abs/1602.03609"&gt;&lt;strong&gt;&lt;em&gt;Attentive Pooling Networks&lt;/em&gt;&lt;/strong&gt;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;[蘑菇先生學習記]　&lt;a href="http://xtf615.com/2019/01/06/attention/"&gt;&lt;strong&gt;&lt;em&gt;Attention in Deep Learning&lt;/em&gt;&lt;/strong&gt;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;[Lil'Log]　&lt;a href="https://lilianweng.github.io/lil-log/2018/06/24/attention-attention.html"&gt;&lt;strong&gt;&lt;em&gt;Attention? Attention!&lt;/em&gt;&lt;/strong&gt;&lt;/a&gt;&lt;/li&gt;
+&lt;/ol&gt;
+&lt;script type="text/javascript"&gt;if (!document.getElementById('mathjaxscript_pelican_#%@#$@#')) {
+    var align = "center",
+        indent = "0em",
+        linebreak = "false";
+
+    if (false) {
+        align = (screen.width &lt; 768) ? "left" : align;
+        indent = (screen.width &lt; 768) ? "0em" : indent;
+        linebreak = (screen.width &lt; 768) ? 'true' : linebreak;
+    }
+
+    var mathjaxscript = document.createElement('script');
+    mathjaxscript.id = 'mathjaxscript_pelican_#%@#$@#';
+    mathjaxscript.type = 'text/javascript';
+    mathjaxscript.src = 'https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.3/latest.js?config=TeX-AMS-MML_HTMLorMML';
+
+    var configscript = document.createElement('script');
+    configscript.type = 'text/x-mathjax-config';
+    configscript[(window.opera ? "innerHTML" : "text")] =
+        "MathJax.Hub.Config({" +
+        "    config: ['MMLorHTML.js']," +
+        "    TeX: { extensions: ['AMSmath.js','AMSsymbols.js','noErrors.js','noUndefined.js'], equationNumbers: { autoNumber: 'none' } }," +
+        "    jax: ['input/TeX','input/MathML','output/HTML-CSS']," +
+        "    extensions: ['tex2jax.js','mml2jax.js','MathMenu.js','MathZoom.js']," +
+        "    displayAlign: '"+ align +"'," +
+        "    displayIndent: '"+ indent +"'," +
+        "    showMathMenu: true," +
+        "    messageStyle: 'normal'," +
+        "    tex2jax: { " +
+        "        inlineMath: [ ['\\\\(','\\\\)'] ], " +
+        "        displayMath: [ ['$$','$$'] ]," +
+        "        processEscapes: true," +
+        "        preview: 'TeX'," +
+        "    }, " +
+        "    'HTML-CSS': { " +
+        "        availableFonts: ['STIX', 'TeX']," +
+        "        preferredFont: 'STIX'," +
+        "        styles: { '.MathJax_Display, .MathJax .mo, .MathJax .mi, .MathJax .mn': {color: 'inherit ! important'} }," +
+        "        linebreaks: { automatic: "+ linebreak +", width: '90% container' }," +
+        "    }, " +
+        "}); " +
+        "if ('default' !== 'default') {" +
+            "MathJax.Hub.Register.StartupHook('HTML-CSS Jax Ready',function () {" +
+                "var VARIANT = MathJax.OutputJax['HTML-CSS'].FONTDATA.VARIANT;" +
+                "VARIANT['normal'].fonts.unshift('MathJax_default');" +
+                "VARIANT['bold'].fonts.unshift('MathJax_default-bold');" +
+                "VARIANT['italic'].fonts.unshift('MathJax_default-italic');" +
+                "VARIANT['-tex-mathit'].fonts.unshift('MathJax_default-italic');" +
+            "});" +
+            "MathJax.Hub.Register.StartupHook('SVG Jax Ready',function () {" +
+                "var VARIANT = MathJax.OutputJax.SVG.FONTDATA.VARIANT;" +
+                "VARIANT['normal'].fonts.unshift('MathJax_default');" +
+                "VARIANT['bold'].fonts.unshift('MathJax_default-bold');" +
+                "VARIANT['italic'].fonts.unshift('MathJax_default-italic');" +
+                "VARIANT['-tex-mathit'].fonts.unshift('MathJax_default-italic');" +
+            "});" +
+        "}";
+
+    (document.body || document.getElementsByTagName('head')[0]).appendChild(configscript);
+    (document.body || document.getElementsByTagName('head')[0]).appendChild(mathjaxscript);
+}
+&lt;/script&gt;</content><category term="Articles"></category><category term="attention"></category><category term="rnn"></category><category term="seq2seq"></category></entry></feed>
