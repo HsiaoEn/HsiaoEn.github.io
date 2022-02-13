@@ -109,7 +109,16 @@ textarea {
 select {
   width: 100%; }
 
-
+.site-footer {
+  right: 0;
+  bottom: 0;
+  left: 0;
+  padding: 1rem;
+  text-align: center;
+  font-size: 14.4375px;
+  color: #828282;
+  clear: both;
+  margin-bottom: 30px; }
 
 .row {
   width: 100%;
